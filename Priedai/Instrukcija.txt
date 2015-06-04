@@ -1,0 +1,35 @@
+﻿lung_cancer_deg.r
+
+1. Programai reikalinga R programa.
+
+
+2. Visą "Priedai" aplanko turinį reikia perkleti į R darbinę direktoriją.
+
+3. Pasileidus R programą, reikia patikrinti RSQLite bibliotekos versiją. 
+
+
+packageVersion("RSQLite") komanda grąžina RSQLite bibliotekos versijos informaciją.
+
+
+Jeigu R grąžina: [1] ‘0.11.4’, tai pereiti prie 5 punkto, jeigu ne, prie 4.
+
+
+4. Jeigu versija naujesnė arba biblioteka nėra instaliuota tai rankiniu būdų įdiegiame biblioteką iš failo "0.11.4.tar.gz", kuris pateikiamas kartu su likusiais failais.
+
+
+5. Galima įdiegti visas kitas reikalingas bibliotekas source("lib_install.r") komanda.
+
+
+6. Programa paleidžiama source("lung_cancer_deg.r") komandos pagalba.
+
+
+
+
+
+lung_cancer_deg.Rmd (programa, kuri sugeneruoja pdf formato failą su rezultatais ir trumpu aptarimu)
+
+1. Programai reikalinga R Studio programa.
+
+2. Taip pat reikalinga "knitr" biblioteka.
+
+3. Atsidarius lung_cancer_deg.Rmd failą per Rstudio ir pasirinkus funkcija "knit to PDF" sugeneruojamas PDF failas su rezultatais ir trumpu jų aptarimu. Sugeneruojamas PDF failas pateikiamas kartu su darbu.

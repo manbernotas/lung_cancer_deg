@@ -1,0 +1,131 @@
+---
+title: "Reikšmingai skirtingos raiškos genų paieška tarp plaučių vėžio tipų"
+author: "Mantas Bernotas"
+output:
+  pdf_document:
+    fig_caption: yes
+    latex_engine: xelatex
+---
+
+Šio darbo tikslas - rasti reikšmingai skirtingos raiškos genus tarp dviejų plaučių vėžio tipų. Naudojami duomenys yra "cel" formato failai, su vėžinių ląstelių pavyzdžių genų raiškos profiliais. Prieš analizuojant duomenis, jie yra apdorojami. Tada patikrinama mikrogardelių kokybė. Galiausiai duomenys analizuojami ir reikšmingai skirtingos raiškos, tarp dviejų plaučių vėžio tipų, genai vizualizuojami vulkano tipo grafikuose. Taip pat sugeneruojami "csv" failai (išsaugomi aplanke "All"), kuriuose pateikiami reikšmingai skirtingos raiškos genai su jiems apskaičiuotais statistiniais parametrais.
+
+Importuojamos reikalingos Bioconductor bibliotekos
+
+```{r libraries, message=F, warning=F}
+library(affy)
+library(simpleaffy)
+library(RColorBrewer)
+library(affyPLM)
+library(limma)
+library(hgu133plus2.db)
+library(annotate)
+require(ggplot2)
+```
+
+Nuskaitomi CEL failai is "celfiles" aplanko, pagal "annotation.txt" faile nurodytą tvarką.  
+
+```{r annot, echo=F}
+read.delim("celfiles/annotation.txt")
+```
+```{r normalization, message=F, warning=F, echo=F, results='hide'}
+celfiles <- read.affy(covdesc="annotation.txt", path="celfiles")
+celfiles.gcrma <- gcrma(celfiles)
+cols <- brewer.pal(8, "Set1")
+```
+
+\begin{center}Apdorojami duomenys\end{center}
+
+Pateikiami duomenys prieš normalizaciją "Boxplot" ir logaritminio intensyvumo tankio grafikais.  
+
+```{r unnormbp, echo=F, fig.cap="Nenormalizuotų duomenų Boxplot tipo grafikas"}
+par(mar = c(8, 2, 0.1, 0.001))
+boxplot(celfiles, col=cols, las=2)
+hist(celfiles, col=cols)
+```
+
+Toliau pateikiami duomenys po normalizacijos "Boxplot" ir logaritminio intensyvumo tankio grafikais.  
+
+```{r normbp, echo=F, fig.cap="Normalizuotų duomenų Boxplot tipo grafikas"}
+par(mar = c(8, 2, 0.1, 0.001))
+boxplot(celfiles.gcrma, col=cols, las=2)
+hist(celfiles.gcrma, col=cols)
+```
+
+\begin{center}Nustatinėjama mikrogardelių kokybė\end{center}
+
+Mikrogardelių kokybės įvertinimui pavaizduojami visų analizuojamų mikrogardelių RLE ir NUSE grafikai.  
+
+```{r nuse, echo=F}
+celfiles.qc <- fitPLM(celfiles)
+par(mar = c(8, 2.5, 3, 0.5))
+RLE(celfiles.qc, las=2, main="RLE")
+NUSE(celfiles.qc, las=2, main="NUSE")
+```
+  
+Iš RLE grafiko matome, kad „GSM1065782.CEL“ stulpelio centras ganėtinai nutolęs nuo 0, ir galbūt jį reikėtų pakeisti kitu failu. Tačiau šis nuokrypis nėra toks reikšmingas, kad įtakotus rezultatus, todėl paliekame tą patį „cel“ failą.  
+Iš NUSE grafiko galima matyti, kad nėra „cel“ failo, kurio stulpelio centras viršytų 1.1 ribą. Taigi galima teigti, kad pasirinktos mikrogardelės yra geros kokybės ir tolimesni rezultatai, nebus iškreipti dėl kokybės problemų.  
+
+```{r design, message=F, warning=F, echo=F}
+celfiles.filtered <- nsFilter(celfiles.gcrma, require.entrez=TRUE, remove.dupEntrez=TRUE)
+samples <- celfiles.gcrma$Factors
+samples <- as.factor(samples)
+design <- model.matrix(~0 + samples)
+colnames(design) <- c("ACs1", "ACs2", "SCCs1", "SCCs2")
+```
+
+```{r contrast, message=F, warning=F, echo=F}
+fit <- lmFit(exprs(celfiles.filtered$eset), design)
+contrast.matrix <- makeContrasts(ACs1-ACs2, ACs1-SCCs1, ACs1-SCCs2, ACs2-SCCs1, ACs2-SCCs2, SCCs1-SCCs2, levels=design)
+fits <- contrasts.fit(fit, contrast.matrix)
+ebFit <- eBayes(fits)
+```
+
+\begin{center}Reikšmingai skirtingos raiškos genai pateikiami vulkano grafikais\end{center}
+
+Vulkano grafikas yra taškinis grafikas, kuris dažnai naudojamas mikrogardelių duomenų rinkinių analizei, svarbių genų peržiūrai. Grafiką sudaro ant x ašies vaizduojama geno logaritminė pokyčio reikšmingumo slenksčio reikšmė ir ant y ašies neigiamas dešimtainis P-reikšmės logaritmas. Vaizduojami biologiškai ir statistiškai reikšmingi genai. Biologinė įtaka pokyčiui stebima ant x ašies, y ašis rodo statistinį pokyčio patikimumą. Iš tokių grafikų galima atrinkti svarbiausius atvejus tolimesniems tyrimams. Toliau pateikiami visų lyginimų vulkano grafikai. Vulkano tipo grafike išskiriami genai, kurių logaritminės pokyčio reikšmingumo slenksčio reikšmės modulis yra didesnis už 2 ir kurių P-reikšmė yra mažesnė už 0.05 ir genų, kurių logaritminės pokyčio reikšmingumo slenksčio reikšmės modulis yra didesnis už 2, skaičiaus, santykį.  
+
+```{r loop, echo=F, message=F, warning=F}
+for (j in 1:6){
+probeset.list <- topTable(ebFit, coef=j, number=10000, lfc=2)
+gene.symbols <- getSYMBOL(row.names(probeset.list), "hgu133plus2")
+results <- cbind(probeset.list, gene.symbols)
+gene_list <- topTable(ebFit, coef=j, number=1000000, sort.by="logFC")
+gene.symbols <- getSYMBOL(row.names(gene_list), "hgu133plus2")
+gene_list <- cbind(gene_list, gene.symbols)
+par(mar=c(3,3,2,1), mgp=c(2,.7,0), tck=-.01)
+no_of_genes = dim(probeset.list)[1]
+gene_list$threshold = as.factor(abs(gene_list$logFC) > 2 & gene_list$P.Value < 0.05/no_of_genes)
+
+if (j == 1){write.csv(results, "All/ACs1vsACs2.csv", row.names=TRUE)
+g = ggplot(data=gene_list, aes(x=logFC, y=-log10(P.Value), colour=threshold)) + 
+  geom_point(alpha=0.4, size=1.75) + theme(legend.position = "none") + xlim(c(-5, 5)) + ylim(c(0, 7.5)) + xlab("log2 fold change") + ylab("-log10 p-value") + ggtitle("\nACs1 ir ACs2 lyginimas")
+plot(g)}
+
+if (j == 2){write.csv(results, "All/ACs1vsSCCs1.csv", row.names=TRUE)
+g = ggplot(data=gene_list, aes(x=logFC, y=-log10(P.Value), colour=threshold)) + 
+  geom_point(alpha=0.4, size=1.75) + theme(legend.position = "none") + xlim(c(-5, 5)) + ylim(c(0, 7.5)) + xlab("log2 fold change") + ylab("-log10 p-value") + ggtitle("\nACs1 ir SCCs1 lyginimas")
+plot(g)}
+
+if (j == 3){write.csv(results, "All/ACs1vsSCCs2.csv", row.names=TRUE)
+g = ggplot(data=gene_list, aes(x=logFC, y=-log10(P.Value), colour=threshold)) + 
+  geom_point(alpha=0.4, size=1.75) + theme(legend.position = "none") + xlim(c(-5, 5)) + ylim(c(0, 7.5)) + xlab("log2 fold change") + ylab("-log10 p-value") + ggtitle("\nACs1 ir SCCs2 lyginimas")
+plot(g)}
+
+if (j == 4){write.csv(results, "All/ACs2vsSCCs1.csv", row.names=TRUE)
+g = ggplot(data=gene_list, aes(x=logFC, y=-log10(P.Value), colour=threshold)) + 
+  geom_point(alpha=0.4, size=1.75) + theme(legend.position = "none") + xlim(c(-5, 5)) + ylim(c(0, 7.5)) + xlab("log2 fold change") + ylab("-log10 p-value") + ggtitle("\nACs2 ir SCCs1 lyginimas")
+plot(g)}
+
+if (j == 5){write.csv(results, "All/ACs2vsSCCs2.csv", row.names=TRUE)
+g = ggplot(data=gene_list, aes(x=logFC, y=-log10(P.Value), colour=threshold)) + 
+  geom_point(alpha=0.4, size=1.75) + theme(legend.position = "none") + xlim(c(-5, 5)) + ylim(c(0, 7.5)) + xlab("log2 fold change") + ylab("-log10 p-value") + ggtitle("\nACs2 ir SCCs2 lyginimas")
+plot(g)}
+
+if (j == 6){write.csv(results, "All/SCCs1vsSCCs2.csv", row.names=TRUE)
+g = ggplot(data=gene_list, aes(x=logFC, y=-log10(P.Value), colour=threshold)) + 
+  geom_point(alpha=0.4, size=1.75) + theme(legend.position = "none") + xlim(c(-5, 5)) + ylim(c(0, 7.5)) + xlab("log2 fold change") + ylab("-log10 p-value") + ggtitle("\nSCCs1 ir SCCs2 lyginimas")
+plot(g)}
+}
+```
+  
+Iš vulkano grafikų taip pat galime pastebėti, kad daug daugiau reikšmingai skirtingos raiškos genų yra tarp AC ir SCC tipų lyginimų, nei tarp AC ir AC arba SCC ir SCC tipų lyginimų. Tai rodo, kad lyginant tos pačios plaučių vėžio rūšies tačiau skirtingų vėžio stadijų pavyzdžius yra randama gerokai mažiau reikšmingai skirtingos raiškos genų, negu lyginant pavyzdžius tarp skirtingų plaučių vėžio rūšių.
